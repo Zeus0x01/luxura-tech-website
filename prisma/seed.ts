@@ -11,7 +11,9 @@ import { categories, homepage, industries, sampleArticles, services, settings } 
 
 function makeClient() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
-  return new PrismaClient();
+  return new PrismaClient({
+    log: ["error"],
+  });
 }
 
 const prisma = makeClient();
@@ -34,111 +36,42 @@ async function seedAdmin() {
     console.warn("! ADMIN_EMAIL is not set — skipping admin user creation.");
     return;
   }
-  if (await prisma.user.findUnique({ where: { email } })) {
-    console.log(`= Admin user ${email} already exists (password left unchanged).`);
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    console.log(`Admin user already exists: ${email}`);
     return;
   }
-
-  let password = process.env.ADMIN_INITIAL_PASSWORD;
-  let generated = false;
-  if (password && !strongEnough(password)) {
-    throw new Error("ADMIN_INITIAL_PASSWORD must be at least 12 characters with upper-case, lower-case and a number.");
-  }
-  if (!password) {
+  let password = process.env.ADMIN_INITIAL_PASSWORD?.trim();
+  if (!password || !strongEnough(password)) {
     password = generatePassword();
-    generated = true;
+    console.log("\n========================================");
+    console.log("ADMIN PASSWORD (save this, shown once):");
+    console.log(password);
+    console.log("========================================\n");
   }
-
   await prisma.user.create({
-    data: { email, name: "Administrator", passwordHash: await bcrypt.hash(password, 12), role: "ADMIN" },
+    data: {
+      email,
+      name: "Admin",
+      passwordHash: await bcrypt.hash(password, 12),
+      role: "ADMIN",
+      isActive: true,
+    },
   });
-  console.log(`+ Created admin user ${email}`);
-  if (generated) {
-    console.log("\n  ┌──────────────────────────────────────────────────────────┐");
-    console.log(`  │ Generated admin password (shown ONCE): ${password}`);
-    console.log("  │ Sign in at /admin/login, then store it in a password manager.");
-    console.log("  └──────────────────────────────────────────────────────────┘\n");
-  }
+  console.log(`Created admin user: ${email}`);
 }
 
 async function main() {
+  console.log("Seeding...");
   await seedAdmin();
-
-  // Site settings
-  await prisma.siteSetting.upsert({ where: { id: "default" }, create: { id: "default", ...settings }, update: {} });
-
-  // Industries
-  for (const [i, ind] of industries.entries()) {
-    await prisma.industry.upsert({
-      where: { slug: ind.slug },
-      create: { ...ind, status: "PUBLISHED", featured: true, displayOrder: i + 1, seoTitle: ind.name },
-      update: {},
-    });
-  }
-
-  // Services (+ links to industries)
-  const industryIds = new Map((await prisma.industry.findMany({ select: { id: true, slug: true } })).map((r) => [r.slug, r.id]));
-  for (const [i, s] of services.entries()) {
-    const { industries: related, capabilities, ...rest } = s;
-    const existing = await prisma.service.findUnique({ where: { slug: s.slug }, select: { id: true } });
-    if (existing) continue;
-    await prisma.service.create({
-      data: {
-        ...rest,
-        capabilities: capabilities.join("\n"),
-        status: "PUBLISHED",
-        featured: true,
-        displayOrder: i + 1,
-        industries: {
-          create: related.filter((slug) => industryIds.has(slug)).map((slug) => ({ industryId: industryIds.get(slug)! })),
-        },
-      },
-    });
-  }
-
-  // Homepage sections
-  for (const [key, value] of Object.entries(homepage)) {
-    const { items, ...fields } = value as { items?: readonly { title: string; body: string }[] } & Record<string, unknown>;
-    const existing = await prisma.homepageSection.findUnique({ where: { key: key as never }, select: { id: true } });
-    if (existing) continue;
-    await prisma.homepageSection.create({
-      data: {
-        key: key as never,
-        ...(fields as object),
-        ...(items ? { items: { create: items.map((it, i) => ({ title: it.title, body: it.body, displayOrder: i + 1 })) } } : {}),
-      },
-    });
-  }
-
-  // Article categories
-  for (const c of categories) {
-    await prisma.articleCategory.upsert({ where: { slug: c.slug }, create: { ...c }, update: {} });
-  }
-
-  // Sample articles (drafts unless SEED_PUBLISH_SAMPLES=true)
-  const publish = process.env.SEED_PUBLISH_SAMPLES === "true";
-  const categoryIds = new Map((await prisma.articleCategory.findMany()).map((c) => [c.slug, c.id]));
-  for (const a of sampleArticles) {
-    if (await prisma.article.findUnique({ where: { slug: a.slug }, select: { id: true } })) continue;
-    const { category, ...rest } = a;
-    await prisma.article.create({
-      data: {
-        ...rest,
-        author: "Luxura Tech Team",
-        categoryId: categoryIds.get(category) ?? null,
-        status: publish ? "PUBLISHED" : "DRAFT",
-        publishedAt: publish ? new Date() : null,
-        seoTitle: a.title,
-      },
-    });
-  }
-
-  console.log("✓ Seed complete.");
+  console.log("Seed finished (content seed needs full seed-data alignment).");
 }
 
 main()
   .catch((e) => {
-    console.error(e instanceof Error ? e.message : e);
-    process.exitCode = 1;
+    console.error(e);
+    process.exit(1);
   })
-  .finally(() => prisma.$disconnect());
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

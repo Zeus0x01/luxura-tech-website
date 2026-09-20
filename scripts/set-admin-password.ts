@@ -5,8 +5,6 @@ import { PrismaClient } from "../src/generated/prisma/client";
 /**
  * Reset an admin password from the command line:
  *   ADMIN_NEW_PASSWORD='...' npm run admin:password -- you@example.com
- * The password is read from the environment so it never lands in shell history
- * as a command argument.
  */
 async function main() {
   const email = process.argv[2]?.trim().toLowerCase();
@@ -21,7 +19,7 @@ async function main() {
   }
 
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
-  const prisma = new PrismaClient();
+  const prisma = new PrismaClient({ log: ["error"] });
 
   try {
     const user = await prisma.user.findUnique({ where: { email } });
@@ -29,7 +27,10 @@ async function main() {
       console.error(`No admin user with email ${email}`);
       process.exit(1);
     }
-    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(password, 12), isActive: true } });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: await bcrypt.hash(password, 12), isActive: true },
+    });
     console.log(`Password updated for ${email}`);
   } finally {
     await prisma.$disconnect();
