@@ -96,53 +96,56 @@ model Service {
   updatedAt        DateTime          @updatedAt
   industries       ServiceIndustry[]
 
+  @@index([status, displayOrder])
+  @@index([featured])
   @@map("services")
 }
 
 model Industry {
-  id               String            @id @default(cuid())
-  title            String
-  slug             String            @unique
-  shortDescription String            @db.VarChar(500)
-  description      String            @db.Text
-  challenges       String?           @db.Text
-  solutions        String?           @db.Text
-  icon             String?
-  coverImage       String?           @db.VarChar(500)
-  status           ContentStatus     @default(DRAFT)
-  featured         Boolean           @default(false)
-  displayOrder     Int               @default(0)
-  seoTitle         String?
-  seoDescription   String?           @db.VarChar(320)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  services         ServiceIndustry[]
+  id             String            @id @default(cuid())
+  name           String
+  slug           String            @unique
+  description    String            @db.Text
+  image          String?           @db.VarChar(500)
+  icon           String?
+  status         ContentStatus     @default(DRAFT)
+  featured       Boolean           @default(false)
+  displayOrder   Int               @default(0)
+  seoTitle       String?
+  seoDescription String?           @db.VarChar(320)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  services       ServiceIndustry[]
 
+  @@index([status, displayOrder])
+  @@index([featured])
   @@map("industries")
 }
 
 model ServiceIndustry {
   serviceId  String
   industryId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
   service    Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   industry   Industry @relation(fields: [industryId], references: [id], onDelete: Cascade)
 
   @@id([serviceId, industryId])
+  @@index([industryId])
   @@map("service_industries")
 }
 
 // ---------------------------------------------------------------------------
-// Insights / articles
+// Insights (articles)
 // ---------------------------------------------------------------------------
 
 model ArticleCategory {
-  id          String    @id @default(cuid())
-  name        String
-  slug        String    @unique
-  description String?   @db.VarChar(500)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  articles    Article[]
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  articles  Article[]
 
   @@map("article_categories")
 }
@@ -151,11 +154,11 @@ model Article {
   id             String           @id @default(cuid())
   title          String
   slug           String           @unique
-  excerpt        String?          @db.VarChar(600)
+  excerpt        String           @db.VarChar(600)
   /// Markdown. Rendered without raw HTML.
   content        String           @db.Text
   featuredImage  String?          @db.VarChar(500)
-  author         String?
+  author         String
   categoryId     String?
   status         ContentStatus    @default(DRAFT)
   publishedAt    DateTime?
@@ -171,25 +174,23 @@ model Article {
 }
 
 // ---------------------------------------------------------------------------
-// Homepage sections (CMS)
+// Homepage content (edited from the admin dashboard)
 // ---------------------------------------------------------------------------
 
 model HomepageSection {
-  id           String               @id @default(cuid())
-  key          HomepageSectionKey   @unique
+  id           String                @id @default(cuid())
+  key          HomepageSectionKey    @unique
   title        String?
-  subtitle     String?              @db.Text
-  body         String?              @db.Text
+  subtitle     String?               @db.Text
+  body         String?               @db.Text
   ctaLabel     String?
   ctaHref      String?
-  image        String?              @db.VarChar(500)
-  items        String?              @db.Text
-  featuredIds  String?              @db.Text
-  displayOrder Int                  @default(0)
-  isVisible    Boolean              @default(true)
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  sectionItems HomepageSectionItem[]
+  image        String?               @db.VarChar(500)
+  displayOrder Int                   @default(0)
+  isVisible    Boolean               @default(true)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  items        HomepageSectionItem[]
 
   @@map("homepage_sections")
 }
@@ -235,15 +236,14 @@ model Lead {
 }
 
 // ---------------------------------------------------------------------------
-// Site settings
+// Site settings (single row, id = "default")
 // ---------------------------------------------------------------------------
 
 model SiteSetting {
-  id                    String   @id @default(cuid())
-  companyName           String   @default("Luxura Tech USA LLC")
-  tagline               String?  @db.VarChar(300)
+  id                    String   @id @default("default")
+  companyName           String
+  companyEmail          String?
   phone                 String?
-  email                 String?
   address               String?  @db.VarChar(500)
   logoUrl               String?  @db.VarChar(500)
   faviconUrl            String?  @db.VarChar(500)
@@ -263,7 +263,7 @@ model SiteSetting {
 }
 
 // ---------------------------------------------------------------------------
-// Rate limiting (no Redis needed)
+// Rate limiting (no Redis needed). `key` holds a hashed identifier.
 // ---------------------------------------------------------------------------
 
 model RateLimitBucket {
