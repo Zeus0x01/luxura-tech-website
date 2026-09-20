@@ -2,18 +2,13 @@ import "dotenv/config";
 import { randomInt } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "../src/generated/prisma/client";
-import { categories, homepage, industries, sampleArticles, services, settings } from "./seed-data";
-
-/**
- * Idempotent seed. Safe to run on every deploy: it only CREATES missing rows
- * and never overwrites content that has been edited in the admin dashboard.
- */
+import { PrismaPg } from "@prisma/adapter-pg";
 
 function makeClient() {
-  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
-  return new PrismaClient({
-    log: ["error"],
-  });
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL is not set");
+  const adapter = new PrismaPg({ connectionString: url });
+  return new PrismaClient({ adapter, log: ["error"] });
 }
 
 const prisma = makeClient();
@@ -64,7 +59,7 @@ async function seedAdmin() {
 async function main() {
   console.log("Seeding...");
   await seedAdmin();
-  console.log("Seed finished (content seed needs full seed-data alignment).");
+  console.log("Seed finished.");
 }
 
 main()

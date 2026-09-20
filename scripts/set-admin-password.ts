@@ -1,11 +1,8 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "../src/generated/prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-/**
- * Reset an admin password from the command line:
- *   ADMIN_NEW_PASSWORD='...' npm run admin:password -- you@example.com
- */
 async function main() {
   const email = process.argv[2]?.trim().toLowerCase();
   const password = process.env.ADMIN_NEW_PASSWORD;
@@ -18,8 +15,10 @@ async function main() {
     process.exit(1);
   }
 
-  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
-  const prisma = new PrismaClient({ log: ["error"] });
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL is not set");
+  const adapter = new PrismaPg({ connectionString: url });
+  const prisma = new PrismaClient({ adapter, log: ["error"] });
 
   try {
     const user = await prisma.user.findUnique({ where: { email } });

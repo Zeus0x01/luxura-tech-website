@@ -16,13 +16,8 @@ const authHost = (() => {
   }
 })();
 
-// Hostnames that may call Server Actions. Needed behind hosting proxies where
-// the Origin and Host headers can differ (e.g. apex vs www).
 const allowedOrigins = [...(authHost ? [authHost] : []), ...csvHosts(process.env.ALLOWED_ORIGINS)];
 
-// Content-Security-Policy. Next.js injects small inline scripts for hydration,
-// so 'unsafe-inline' is required for scripts unless a per-request nonce is used
-// (which would force every page to render dynamically and defeat caching).
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
@@ -50,24 +45,18 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  serverExternalPackages: ["bcryptjs"],
+  serverExternalPackages: ["bcryptjs", "pg", "@prisma/adapter-pg"],
   images: {
     formats: ["image/avif", "image/webp"],
-    // Only hosts you list in IMAGE_REMOTE_HOSTS can be optimized; see .env.example.
     remotePatterns: csvHosts(process.env.IMAGE_REMOTE_HOSTS).map((hostname) => ({ protocol: "https" as const, hostname })),
   },
   experimental: {
     serverActions: {
-      bodySizeLimit: "1mb",
-      ...(allowedOrigins.length ? { allowedOrigins } : {}),
+      allowedOrigins: allowedOrigins.length ? allowedOrigins : undefined,
     },
   },
   async headers() {
-    return [
-      { source: "/:path*", headers: securityHeaders },
-      // Admin pages must never be cached by browsers or proxies.
-      { source: "/admin/:path*", headers: [{ key: "Cache-Control", value: "no-store, max-age=0" }] },
-    ];
+    return [{ source: "/:path*", headers: securityHeaders }];
   },
 };
 
