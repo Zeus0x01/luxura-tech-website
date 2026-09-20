@@ -95,6 +95,7 @@ model Service {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   industries       ServiceIndustry[]
+  leads            Lead[]
 
   @@index([status, displayOrder])
   @@index([featured])
@@ -178,60 +179,64 @@ model Article {
 // ---------------------------------------------------------------------------
 
 model HomepageSection {
-  id           String                @id @default(cuid())
-  key          HomepageSectionKey    @unique
-  title        String?
-  subtitle     String?               @db.Text
-  body         String?               @db.Text
-  ctaLabel     String?
-  ctaHref      String?
-  image        String?               @db.VarChar(500)
-  displayOrder Int                   @default(0)
-  isVisible    Boolean               @default(true)
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
-  items        HomepageSectionItem[]
+  id                String                @id @default(cuid())
+  key               HomepageSectionKey    @unique
+  enabled           Boolean               @default(true)
+  title             String?
+  subtitle          String?               @db.Text
+  body              String?               @db.Text
+  image             String?               @db.VarChar(500)
+  primaryCtaLabel   String?
+  primaryCtaHref    String?
+  secondaryCtaLabel String?
+  secondaryCtaHref  String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  items             HomepageSectionItem[]
 
   @@map("homepage_sections")
 }
 
 model HomepageSectionItem {
-  id        String          @id @default(cuid())
-  sectionId String
-  title     String?
-  body      String?         @db.Text
-  icon      String?
-  href      String?
-  sortOrder Int             @default(0)
-  section   HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  id           String          @id @default(cuid())
+  sectionId    String
+  title        String
+  body         String          @db.Text
+  displayOrder Int             @default(0)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  section      HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
-  @@index([sectionId])
+  @@index([sectionId, displayOrder])
   @@map("homepage_section_items")
 }
 
 // ---------------------------------------------------------------------------
-// Leads / contact form
+// Leads (contact form submissions) — private, never exposed publicly
 // ---------------------------------------------------------------------------
 
 model Lead {
-  id               String         @id @default(cuid())
-  name             String
-  email            String
-  phone            String?
-  company          String?
-  message          String         @db.Text
-  preferredContact ContactMethod  @default(EMAIL)
-  status           LeadStatus     @default(NEW)
-  source           String?        @db.VarChar(100)
-  internalNotes    String?        @db.Text
-  emailSent        Boolean        @default(false)
-  emailError       String?        @db.VarChar(500)
-  archivedAt       DateTime?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  id                     String        @id @default(cuid())
+  fullName               String
+  company                String?
+  email                  String
+  phone                  String?
+  country                String?
+  serviceId              String?
+  preferredContactMethod ContactMethod @default(EMAIL)
+  message                String        @db.Text
+  status                 LeadStatus    @default(NEW)
+  internalNotes          String?       @db.Text
+  /// Set when the Resend notification was accepted. NULL = not (yet) sent.
+  notifiedAt             DateTime?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  service                Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
+  @@index([createdAt])
   @@index([email])
+  @@index([serviceId])
   @@map("leads")
 }
 
